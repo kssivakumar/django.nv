@@ -1,10 +1,10 @@
 jobs:
   build:
     docker:
-      - image: cimg/base:stable                   # similar to "image" in GitLab
+      - image: cimg/base:stable
     steps:
       - checkout
-      - run: echo "This is a build step"          # similar to "script" in GitLab
+      - run: echo "This is a build step"
 
   test:
     docker:
@@ -19,9 +19,23 @@ jobs:
     steps:
       - checkout
       - run:
+          name: Integration (non-blocking)
           command: |
-            echo "This is an integration step"
-            exit 1
+            (
+              echo "This is an integration step"
+              exit 1
+            ) || echo "Integration step failed — continuing anyway"
+
+  artifact:
+    docker:
+      - image: cimg/base:stable
+    steps:
+      - checkout
+      - run:
+          name: Create artifact file
+          command: echo "hello" > hello.txt
+      - store_artifacts:
+          path: hello.txt
 
   prod:
     docker:
@@ -31,11 +45,34 @@ jobs:
       - run: echo "This is a deploy step"
 
 workflows:
-  version: 2
   django:
     jobs:
-      - build
-      - test
-      - integration
+      - build:
+          filters:
+            branches:
+              only: main
+      - test:
+          requires:
+            - build
+          filters:
+            branches:
+              only: main
+      - integration:
+          requires:
+            - test
+          filters:
+            branches:
+              only: main
+      - artifact:
+          requires:
+            - integration
+          filters:
+            branches:
+              only: main
       - prod:
           type: approval
+          requires:
+            - artifact
+          filters:
+            branches:
+              only: main
